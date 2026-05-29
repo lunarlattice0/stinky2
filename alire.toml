@@ -1,0 +1,15 @@
+name = "stinky2"
+description = "Ada SPARK-validated reimplementation of the STINKY game network library."
+version = "0.1.0-dev"
+
+authors = ["Your Name"]
+maintainers = ["Your Name <lunar.lattice0@gmail.com>"]
+licenses = "GPL-3.0-or-later"
+website = ""
+tags = ["game", "enet", "gaming", "networking"]
+
+[test]
+runner = "alire"
+
+[[depends-on]]
+gnatprove = "^15.1.0"
