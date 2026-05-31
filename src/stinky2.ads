@@ -4,8 +4,9 @@
 
 pragma SPARK_Mode (On);
 
-with Ada.Strings;  use Ada.Strings;
 with Interfaces.C; use Interfaces.C;
+with Interfaces.C.Strings; use Interfaces.C.Strings;
+with System; use System;
 
 package Stinky2
    with SPARK_Mode => On
@@ -46,6 +47,28 @@ is
     HostSecretKey  : SecretKey (0 .. crypto_kx_secretkeybytes - 1);
     HostSessionKey : SessionKey (0 .. crypto_kx_sessionkeybytes - 1);
 
+    -- ENetAddress Data
+    type enet_uint32 is new Interfaces.C.unsigned;
+    type enet_uint16 is new Interfaces.C.unsigned_short;
+    type enet_uint8 is new Interfaces.C.unsigned_char;
+
+    type ENetAddress is record
+        host : enet_uint32;
+        port : enet_uint16;
+    end record;
+    pragma Convention (C, ENetAddress);
+
+    -- Hack to get a null pointer in Ada
+    type ENetAddressAccess is access constant ENetAddress;
+
+    type ClientsCount is new enet_uint8;
+    type ChannelsCount is new enet_uint8;
+    type BandwidthCount is new enet_uint32;
+
+    -- Pointers, not full impls...maybe we throw some stuff on later and convert this an access type.
+    type ENetHostPtr is new System.Address;
+    type ENetPeerPtr is new System.Address;
+
     -- A transmission layer representation of a peer.
     --type PeerInformation is record
 
@@ -62,9 +85,44 @@ is
     type FnResult is (Success, Fail);
 
     -- Functions
-    function Init
-       (is_hosting : Boolean) return FnResult; -- Initialize subsystems
-    -- TODO: Add atexit for enet_deinitialize.
+    function Init return FnResult; -- Initialize subsystems
+    procedure Deinit with Always_Terminates, Global => Null;
+
+    -- utility
+    function IPToAddress(address : in out ENetAddress; ip : in String) return FnResult
+    with
+        Side_Effects,
+        Pre => ip'Length /= 0;
+
+
+    procedure DestroyHost
+    (hostPtr : in out ENetHostPtr)
+    with
+        Global => Null,
+        Pre => hostPtr /= ENetHostPtr(System.Null_Address),
+        Post => hostPtr = ENetHostPtr(System.Null_Address);
+
+    function StartHost
+       (
+        listen : Boolean;
+        hostPtr : out ENetHostPtr; -- CAUTION, may be Null_Address...insert checks for this.
+        address   : ENetAddress;
+        clients   : ClientsCount;
+        channels  : ChannelsCount;
+        bandwidth : BandwidthCount) return FnResult
+    with Side_Effects,
+        Global => Null;
+
+    function Connect (
+        peer : out ENetPeerPtr;
+        host : ENetHostPtr;
+        address : ENetAddress;
+        channelCount : ChannelsCount;
+        data : enet_uint32
+    ) return FnResult
+    with Side_Effects,
+        Global => Null,
+        Pre => host /= ENetHostPtr(System.Null_Address);
     --procedure Recv; -- Receive and decrypt data
     --procedure Send; -- Encrypt and send data.
 
