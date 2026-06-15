@@ -13,7 +13,8 @@ begin
 
     declare
         hostPtr : ENetHostPtr;
-        fakeAddress : constant ENetAddress := (16777343,0);
+        -- fakeAddress is ignored.
+        fakeAddress : constant ENetAddress := (0,0);
         address : ENetAddress := (0,6969);
         clients : constant ClientsCount := 1;
         channels : constant ChannelsCount := 1;
@@ -31,12 +32,12 @@ begin
             raise Program_Error with ("Couldn't start host!");
         end if;
 
-
-
-        if Connect(peer, hostPtr, address'Access, channels, enet_uint32(0)) /= Success then
+        if Connect(peer, hostPtr, address, channels, enet_uint32(0)) /= Success then
             raise Program_Error with ("Couldn't connect!");
         end if;
 
+        Put_Line(address.host'Image);
+        Put_Line(address.port'Image);
 
         DestroyHost(hostPtr);
         Deinit;
