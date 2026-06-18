@@ -14,24 +14,23 @@ is
                     Put_Line ("Connect success");
                     -- Send off our public key to the client and await public key to complete keyexchange
                     declare
-                        packet : ENetPacket;
-                        flags  : constant ENetPacketFlag :=
+                        packet        : ENetPacketPtr;
+                        flags         : constant ENetPacketFlag :=
                            ENET_PACKET_FLAG_RELIABLE;
-                        function HostPubkey_packet_create_wrapper is new
-                           packet_create_wrapper (T => PublicKey);
+                        hostPubkeyAdr : constant System.Address :=
+                           Stinky2.HostPubkey'Address;
                     begin
                         -- TODO: write a working packet_create func.
-                        --packet :=
-                        --   HostPubkey_packet_create_wrapper
-                        --      (Stinky2.HostPubkey,
-                        --       Stinky2.publicKey_size,
-                        --       flags);
-                        if enet_peer_send (event.peer, 0, packet) = 0 then
+                        packet :=
+                           enet_packet_create
+                              (hostPubkeyAdr, Stinky2.publicKey_size, flags);
+
+                        if enet_peer_send (event.peer, 0, packet.all) = 0 then
                             return Success;
                         else
                             return Fail;
                         end if;
-                    end;
+                    end UnsafePublicKeySend;
 
                 when ENET_EVENT_TYPE_RECEIVE    =>
                     Put_Line ("Received some shit");
