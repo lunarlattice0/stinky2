@@ -17,7 +17,10 @@ is
            External_Name => "enet_peer_send";
         result : constant int := enet_peer_send_real (peer, channelID, packet);
     begin
-        packet := null;
+        -- after a packet is sent, the enet retains control of the packet. So don't touch it....
+        if result = 0 then
+            packet := null;
+        end if;
         return result;
 
     end;
