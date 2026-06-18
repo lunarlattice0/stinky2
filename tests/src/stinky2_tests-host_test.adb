@@ -1,5 +1,6 @@
 with Stinky2;      use Stinky2;
 with Ada.Calendar; use Ada.Calendar;
+with Ada.Text_IO;  use Ada.Text_IO;
 
 procedure Stinky2_Tests.Host_Test with SPARK_Mode => On is
 begin

@@ -3,9 +3,20 @@ with Ada.Text_IO; use Ada.Text_IO;
 package body Stinky2
    with SPARK_Mode => On
 is
+    function enet_packet_create_wrapper
+       (data : T; dataLength : size_t; flags : ENetPacketFlag)
+        return ENetPacketPtr
+    with SPARK_Mode => Off
+    is
+    begin
+        return enet_packet_create (data'Address, dataLength, flags);
+    end;
+
     function Receive (host : ENetHostPtr) return FnResult is
+        pragma Warnings (Off, "-gnatwv");
         event   :
            aliased ENetEvent; -- unsure if aliased is necessary...C may behave wrong if it's in a register..?
+        pragma Warnings (On, "-gnatwv");
         timeout : constant enet_uint32 := 0;
     begin
         while (enet_host_service (host, event, timeout) > 0) loop
@@ -14,23 +25,25 @@ is
                     Put_Line ("Connect success");
                     -- Send off our public key to the client and await public key to complete keyexchange
                     declare
-                        packet        : ENetPacketPtr;
-                        flags         : constant ENetPacketFlag :=
+                        function enet_packet_create_wrapper_hostPubkey is new
+                           enet_packet_create_wrapper (T => PublicKey);
+                        flags  : constant ENetPacketFlag :=
                            ENET_PACKET_FLAG_RELIABLE;
-                        hostPubkeyAdr : constant System.Address :=
-                           Stinky2.HostPubkey'Address;
+                        packet : constant ENetPacketPtr :=
+                           enet_packet_create_wrapper_hostPubkey
+                              (hostPubkey, Stinky2.publicKey_size, flags);
+
                     begin
                         -- TODO: write a working packet_create func.
-                        packet :=
-                           enet_packet_create
-                              (hostPubkeyAdr, Stinky2.publicKey_size, flags);
-
-                        if enet_peer_send (event.peer, 0, packet.all) = 0 then
-                            return Success;
-                        else
-                            return Fail;
+                        if packet /= null then
+                            if enet_peer_send (event.peer, 0, packet.all) = 0
+                            then
+                                return Success;
+                            else
+                                return Fail;
+                            end if;
                         end if;
-                    end UnsafePublicKeySend;
+                    end;
 
                 when ENET_EVENT_TYPE_RECEIVE    =>
                     Put_Line ("Received some shit");

@@ -233,11 +233,18 @@ private
        16#0000_0010#; -- 1 << 4
 
     type ENetPacketPtr is access all ENetPacket;
-    -- questionable practice...should be safe as long as ENET_PACKET_FLAG_NO_ALLOCATE is NOT used.
+    -- Don't use this raw function. use enet_packet_create_wrapper instead.
     function enet_packet_create
        (data : System.Address; dataLength : size_t; flags : ENetPacketFlag)
         return ENetPacketPtr
     with Import => True, Convention => C, Global => null;
+
+    generic
+        type T (<>) is private;
+    function enet_packet_create_wrapper
+       (data : T; dataLength : size_t; flags : ENetPacketFlag)
+        return ENetPacketPtr
+    with Global => null;
 
     function enet_peer_send
        (peer : ENetPeerPtr; channelID : enet_uint8; packet : ENetPacket)
