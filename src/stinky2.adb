@@ -3,6 +3,24 @@ with Ada.Text_IO; use Ada.Text_IO;
 package body Stinky2
    with SPARK_Mode => On
 is
+    function enet_peer_send
+       (peer : ENetPeerPtr; channelID : enet_uint8; packet : in out ENetPacketPtr)
+        return int
+    is
+        function enet_peer_send_real
+           (peer : ENetPeerPtr; channelID : enet_uint8; packet : ENetPacketPtr)
+            return int
+        with
+           Import        => True,
+           Convention    => C,
+           Global        => null,
+           External_Name => "enet_peer_send";
+        result : constant int := enet_peer_send_real (peer, channelID, packet);
+    begin
+        packet := null;
+        return result;
+
+    end;
     function enet_packet_create_wrapper
        (data : T; dataLength : size_t; flags : ENetPacketFlag)
         return ENetPacketPtr
@@ -29,14 +47,14 @@ is
                            enet_packet_create_wrapper (T => PublicKey);
                         flags  : constant ENetPacketFlag :=
                            ENET_PACKET_FLAG_RELIABLE;
-                        packet : constant ENetPacketPtr :=
+                        packet : ENetPacketPtr :=
                            enet_packet_create_wrapper_hostPubkey
                               (hostPubkey, Stinky2.publicKey_size, flags);
 
                     begin
-                        -- TODO: write a working packet_create func.
                         if packet /= null then
-                            if enet_peer_send (event.peer, 0, packet.all) = 0
+                            -- note to self, use packet.all if not ptr?
+                            if enet_peer_send (event.peer, 0, packet) = 0
                             then
                                 return Success;
                             else

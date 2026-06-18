@@ -247,9 +247,10 @@ private
     with Global => null;
 
     function enet_peer_send
-       (peer : ENetPeerPtr; channelID : enet_uint8; packet : ENetPacket)
+       (peer : ENetPeerPtr; channelID : enet_uint8; packet : in out ENetPacketPtr)
         return int
-    with Import => True, Convention => C, Global => null;
+               --with Import => True, Convention => C, Global => null;
+    with Global => null, Side_Effects;
 
     procedure enet_deinitialize
     with Import => True, Convention => C, Global => null, Always_Terminates;
