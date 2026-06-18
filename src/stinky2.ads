@@ -11,23 +11,24 @@ package Stinky2
    with SPARK_Mode => On
 is
 
-    -- Change the nickname limit as you need.
-    --package Nickname is new
-    --    Ada.Strings.Bounded.Generic_Bounded_Length(Max => 32);
-    --use Nickname;
-
     -- Call libsodium to get publickey, secretkey, sessionkey sizes.
-    function crypto_kx_publickeybytes return size_t
-    with Import => True, Convention => C, Global => null;
-    function crypto_kx_secretkeybytes return size_t
-    with Import => True, Convention => C, Global => null;
-    function crypto_kx_sessionkeybytes return size_t
-    with Import => True, Convention => C, Global => null;
+    --
+    --function crypto_kx_publickeybytes return size_t
+    --with Import => True, Convention => C, Global => null;
+    --function crypto_kx_secretkeybytes return size_t
+    --with Import => True, Convention => C, Global => null;
+    --function crypto_kx_sessionkeybytes return size_t
+    --with Import => True, Convention => C, Global => null;
 
-    publicKey_size  : constant Interfaces.C.size_t := crypto_kx_publickeybytes;
-    secretKey_size  : constant Interfaces.C.size_t := crypto_kx_secretkeybytes;
-    sessionKey_size : constant Interfaces.C.size_t :=
-       crypto_kx_sessionkeybytes;
+    --publicKey_size  : constant Interfaces.C.size_t := crypto_kx_publickeybytes;
+    --secretKey_size  : constant Interfaces.C.size_t := crypto_kx_secretkeybytes;
+    --sessionKey_size : constant Interfaces.C.size_t :=
+    --   crypto_kx_sessionkeybytes;
+
+    -- Probably will never change. hardcode to 32 for now.
+    publicKey_size  : constant Interfaces.C.size_t := 32;
+    secretKey_size  : constant Interfaces.C.size_t := 32;
+    sessionKey_size : constant Interfaces.C.size_t := 32;
 
     type PublicKey is
        array (Interfaces.C.size_t range <>) of Interfaces.C.unsigned_char;
@@ -42,9 +43,9 @@ is
     pragma Convention (C, SessionKey);
 
     -- This device's keys.
-    HostPubkey     : PublicKey (0 .. crypto_kx_publickeybytes - 1);
-    HostSecretKey  : SecretKey (0 .. crypto_kx_secretkeybytes - 1);
-    HostSessionKey : SessionKey (0 .. crypto_kx_sessionkeybytes - 1);
+    HostPubkey     : aliased PublicKey (0 .. publicKey_size - 1);
+    HostSecretKey  : aliased SecretKey (0 .. secretKey_size - 1);
+    HostSessionKey : aliased SessionKey (0 .. sessionKey_size - 1);
 
     -- ENetAddress Data
     type enet_uint32 is new Interfaces.C.unsigned;
@@ -72,7 +73,6 @@ is
     --type PeerInformation is record
 
     --ed record;
-
     -- A thin wrapper for ENetPeer *.
     -- For clients, this will be the server. For servers, this will be client.
     --type Peer is record
@@ -87,6 +87,9 @@ is
     function Init return FnResult; -- Initialize subsystems
     procedure Deinit
     with Always_Terminates, Global => Null;
+
+    function Receive (host : ENetHostPtr) return FnResult
+    with Global => HostPubkey;
 
     -- tility
     function IPToAddress
@@ -180,31 +183,71 @@ private
         data         : enet_uint32) return ENetPeerPtr
     with Import => True, Convention => C, Global => null;
 
-    -- int 	enet_host_service (ENetHost *host, ENetEvent *event, enet_uint32 timeout)
     type ENetEventType is
        (ENET_EVENT_TYPE_NONE,
         ENET_EVENT_TYPE_CONNECT,
         ENET_EVENT_TYPE_DISCONNECT,
         ENET_EVENT_TYPE_RECEIVE);
+    pragma Convention (C, ENetEventType);
 
     type ENetPacketFreeCallback is access procedure (Packet : System.Address)
     with Convention => C;
     type ENetPacket is record
+        referenceCount : size_t; -- dont' use
+        flags          : enet_uint32;
         data           : System.Address;
         dataLength     : size_t;
-        flags          : enet_uint32;
         freeCallback   : ENetPacketFreeCallback;
-        referenceCount : size_t;
         UserData       : System.Address;
-    end record;
+    end record
+    with Convention => C;
 
     type ENetEvent is record
+        event     :
+           ENetEventType; -- note: renamed from type, due to keyword conflict
+        peer      : ENetPeerPtr;
         channelID : enet_uint8;
         data      : enet_uint32;
         packet    : ENetPacket;
-        peer      : ENetPeerPtr;
-        event     : ENetEventType;
-    end record;
+
+    end record
+    with Convention => C;
+
+    function enet_host_service
+       (host : ENetHostPtr; event : ENetEvent; timeout : enet_uint32)
+        return int
+    with Import => True, Convention => C, Global => null;
+
+    type ENetPacketFlag is new enet_uint32;
+    ENET_PACKET_FLAG_NONE                : constant ENetPacketFlag :=
+       16#0000_0000#;
+    ENET_PACKET_FLAG_RELIABLE            : constant ENetPacketFlag :=
+       16#0000_0001#; -- 1 << 0
+    ENET_PACKET_FLAG_UNSEQUENCED         : constant ENetPacketFlag :=
+       16#0000_0002#; -- 1 << 1
+    ENET_PACKET_FLAG_NO_ALLOCATE         : constant ENetPacketFlag :=
+       16#0000_0004#; -- 1 << 2
+    ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT : constant ENetPacketFlag :=
+       16#0000_0008#; -- 1 << 3
+    ENET_PACKET_FLAG_SENT                : constant ENetPacketFlag :=
+       16#0000_0010#; -- 1 << 4
+
+    -- questionable practice...should be safe as long as ENET_PACKET_FLAG_NO_ALLOCATE is NOT used.
+    function enet_packet_create
+       (data : System.Address; dataLength : size_t; flags : ENetPacketFlag)
+        return ENetPacket
+    with Import => True, Convention => C, Global => null;
+
+    generic
+        type T (<>) is private;
+    function packet_create_wrapper
+       (data : T; dataLength : size_t; flags : ENetPacketFlag)
+        return ENetPacket;
+
+    function enet_peer_send
+       (peer : ENetPeerPtr; channelID : enet_uint8; packet : ENetPacket)
+        return int
+    with Import => True, Convention => C, Global => null;
 
     procedure enet_deinitialize
     with Import => True, Convention => C, Global => null, Always_Terminates;

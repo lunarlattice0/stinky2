@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
     signal(SIGTERM, sigint_handler);
 
     const char *host = "127.0.0.1";
-    unsigned short port = 6969;
+    unsigned short port = 6868;
 
     if (argc >= 2) host = argv[1];
     if (argc >= 3) port = (unsigned short)atoi(argv[2]);
