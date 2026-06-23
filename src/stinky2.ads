@@ -6,24 +6,11 @@ pragma SPARK_Mode (On);
 
 with Interfaces.C; use Interfaces.C;
 with System;       use System;
+with Ada.Containers.Vectors;
 
 package Stinky2
    with SPARK_Mode => On
 is
-
-    -- Call libsodium to get publickey, secretkey, sessionkey sizes.
-    --
-    --function crypto_kx_publickeybytes return size_t
-    --with Import => True, Convention => C, Global => null;
-    --function crypto_kx_secretkeybytes return size_t
-    --with Import => True, Convention => C, Global => null;
-    --function crypto_kx_sessionkeybytes return size_t
-    --with Import => True, Convention => C, Global => null;
-
-    --publicKey_size  : constant Interfaces.C.size_t := crypto_kx_publickeybytes;
-    --secretKey_size  : constant Interfaces.C.size_t := crypto_kx_secretkeybytes;
-    --sessionKey_size : constant Interfaces.C.size_t :=
-    --   crypto_kx_sessionkeybytes;
 
     -- Probably will never change. hardcode to 32 for now.
     publicKey_size  : constant Interfaces.C.size_t := 32;
@@ -31,21 +18,21 @@ is
     sessionKey_size : constant Interfaces.C.size_t := 32;
 
     type PublicKey is
-       array (Interfaces.C.size_t range <>) of Interfaces.C.unsigned_char;
+       array (Interfaces.C.size_t range 0 .. 31) of Interfaces.C.unsigned_char;
     pragma Convention (C, PublicKey);
 
     type SecretKey is
-       array (Interfaces.C.size_t range <>) of Interfaces.C.unsigned_char;
+       array (Interfaces.C.size_t range 0 .. 31) of Interfaces.C.unsigned_char;
     pragma Convention (C, SecretKey);
 
     type SessionKey is
-       array (Interfaces.C.size_t range <>) of Interfaces.C.unsigned_char;
+       array (Interfaces.C.size_t range 0 .. 31) of Interfaces.C.unsigned_char;
     pragma Convention (C, SessionKey);
 
     -- This device's keys.
-    HostPubkey     : aliased PublicKey (0 .. publicKey_size - 1);
-    HostSecretKey  : aliased SecretKey (0 .. secretKey_size - 1);
-    HostSessionKey : aliased SessionKey (0 .. sessionKey_size - 1);
+    HostPubkey     : aliased PublicKey;
+    HostSecretKey  : aliased SecretKey;
+    HostSessionKey : aliased SessionKey;
 
     -- ENetAddress Data
     type enet_uint32 is new Interfaces.C.unsigned;
@@ -58,7 +45,7 @@ is
     end record;
     pragma Convention (C, ENetAddress);
 
-    -- Hack to get a null pointer in Ada
+    -- Hack to get a void pointer in Ada
     type ENetAddressAccess is access constant ENetAddress;
 
     type ClientsCount is new size_t;
@@ -69,21 +56,23 @@ is
     type ENetHostPtr is new System.Address;
     type ENetPeerPtr is new System.Address;
 
-    -- A transmission layer representation of a peer.
-    --type PeerInformation is record
+    type PeerInformation is record
+        keyExCompleted      : Boolean := false;
+        receive_SessionKey  : SessionKey;
+        transmit_SessionKey : SessionKey;
 
-    --ed record;
-    -- A thin wrapper for ENetPeer *.
-    -- For clients, this will be the server. For servers, this will be client.
-    --type Peer is record
+        -- need id?
+    end record;
+    -- Store PeerInformation in a Vector
+    package PIVector is new
+       Ada.Containers.Vectors
+          (Index_Type   => Natural,
+           Element_Type => PeerInformation);
 
-    --nd record;
+    HostPIVector : PIVector.Vector;
 
-    -- Enums
-    -- Function results
     type FnResult is (Success, Fail);
 
-    --Functions
     function Init return FnResult; -- Initialize subsystems
     procedure Deinit
     with Always_Terminates, Global => Null;
@@ -91,7 +80,6 @@ is
     function Receive (host : ENetHostPtr) return FnResult
     with Global => HostPubkey;
 
-    -- tility
     function IPToAddress
        (address : in out ENetAddress; ip : in String) return FnResult
     with Side_Effects, Pre => ip'Length /= 0;
@@ -122,8 +110,6 @@ is
        Side_Effects,
        Global => Null,
        Pre    => host /= ENetHostPtr (System.Null_Address);
-    --procedure Recv; -- Receive and decrypt data
-    --procedure Send; -- Encrypt an send data.
 
 private
     -- IMPORTED C FUNCTIONS
@@ -246,8 +232,13 @@ private
         return ENetPacketPtr
     with Global => null;
 
+    procedure enet_packet_destroy (packet : ENetPacketPtr)
+    with Import => True, Convention => C, Global => null;
+
     function enet_peer_send
-       (peer : ENetPeerPtr; channelID : enet_uint8; packet : in out ENetPacketPtr)
+       (peer      : ENetPeerPtr;
+        channelID : enet_uint8;
+        packet    : in out ENetPacketPtr)
         return int
                --with Import => True, Convention => C, Global => null;
     with Global => null, Side_Effects;

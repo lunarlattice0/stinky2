@@ -4,8 +4,9 @@ package body Stinky2
    with SPARK_Mode => On
 is
     function enet_peer_send
-       (peer : ENetPeerPtr; channelID : enet_uint8; packet : in out ENetPacketPtr)
-        return int
+       (peer      : ENetPeerPtr;
+        channelID : enet_uint8;
+        packet    : in out ENetPacketPtr) return int
     is
         function enet_peer_send_real
            (peer : ENetPeerPtr; channelID : enet_uint8; packet : ENetPacketPtr)
@@ -56,14 +57,21 @@ is
 
                     begin
                         if packet /= null then
-                            -- note to self, use packet.all if not ptr?
-                            if enet_peer_send (event.peer, 0, packet) = 0
-                            then
+                            -- note to self, use packet.all if not ptr
+                            if enet_peer_send (event.peer, 0, packet) = 0 then
                                 return Success;
                             else
+                                enet_packet_destroy (packet);
                                 return Fail;
                             end if;
                         end if;
+                    end;
+
+                    -- Since event.peer.data is inaccessible, store peer data locally.
+                    declare
+                        newPeerPI : PeerInformation;
+                    begin
+                        HostPIVector.Append (newPeerPI);
                     end;
 
                 when ENET_EVENT_TYPE_RECEIVE    =>
